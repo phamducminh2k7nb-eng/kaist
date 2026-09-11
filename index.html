@@ -47,7 +47,6 @@
             transition: background 0.4s ease;
         }
 
-        /* ===== NỀN MƯỢT MÀ ===== */
         .bg {
             position: fixed;
             inset: 0;
@@ -125,7 +124,6 @@
             50%      { transform: translate(30px, 25px); }
         }
 
-        /* ===== SIDEBAR ===== */
         .sidebar {
             width: 276px;
             background: var(--sidebar);
@@ -210,7 +208,6 @@
             color: var(--text);
         }
 
-        /* ===== MAIN ===== */
         .main {
             flex: 1;
             display: flex;
@@ -250,8 +247,7 @@
             transition: 0.18s;
         }
 
-        .genre:hover,
-        .genre.active {
+        .genre:hover, .genre.active {
             background: var(--accent);
             border-color: var(--accent);
             color: white;
@@ -313,6 +309,10 @@
             margin-bottom: 7px;
         }
 
+        .msg.loading {
+            opacity: 0.7;
+        }
+
         .input-area {
             padding: 20px 32px 32px;
             border-top: 1px solid var(--border);
@@ -366,6 +366,11 @@
             transform: scale(1.06);
         }
 
+        .send:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .suggestions {
             display: flex;
             gap: 8px;
@@ -393,7 +398,6 @@
 </head>
 <body data-theme="dark">
 
-    <!-- Nền -->
     <div class="bg">
         <div class="bg-gradient"></div>
         <div class="orb orb-1"></div>
@@ -401,7 +405,6 @@
         <div class="orb orb-3"></div>
     </div>
 
-    <!-- Sidebar -->
     <div class="sidebar">
         <div class="logo">
             <div class="logo-icon">K</div>
@@ -417,7 +420,6 @@
         <div class="history-item">Bí mật của đồng hồ cổ</div>
     </div>
 
-    <!-- Main -->
     <div class="main">
         <div class="header">
             <div class="header-title">AI Viết Truyện</div>
@@ -433,44 +435,111 @@
         <div class="chat" id="chat">
             <div class="msg ai">
                 <span class="name">Kaist</span>
-                Xin chào, mình là Kaist — AI chuyên viết truyện.<br><br>
-                Bạn muốn bắt đầu câu chuyện nào? Cứ gửi ý tưởng, nhân vật hoặc một câu mở đầu là được.
+                Xin chào, mình là <strong>Kaist</strong> — AI chuyên viết truyện.<br><br>
+                Hãy gửi ý tưởng, nhân vật hoặc một câu mở đầu. Mình sẽ viết tiếp một cách tự nhiên và chỉn chu.
             </div>
         </div>
 
         <div class="input-area">
             <div class="input-wrap">
                 <textarea id="input" placeholder="Viết ý tưởng truyện của bạn..." rows="1"></textarea>
-                <button class="send" onclick="send()">↑</button>
+                <button class="send" id="sendBtn" onclick="send()">↑</button>
             </div>
             <div class="suggestions">
-                <div class="chip" onclick="quick('Viết mở đầu fantasy về cậu bé tìm thấy thanh kiếm cổ')">Mở đầu Fantasy</div>
-                <div class="chip" onclick="quick('Viết đoạn ngôn tình học đường cảm động, tinh tế')">Ngôn tình học đường</div>
-                <div class="chip" onclick="quick('Viết cảnh kinh dị trong căn nhà bỏ hoang lúc nửa đêm')">Cảnh kinh dị</div>
+                <div class="chip" onclick="quick('Viết mở đầu một câu chuyện fantasy về cậu bé tìm thấy thanh kiếm cổ biết nói')">Mở đầu Fantasy</div>
+                <div class="chip" onclick="quick('Viết đoạn văn ngôn tình học đường cảm động, tinh tế, không sến')">Ngôn tình học đường</div>
+                <div class="chip" onclick="quick('Viết một cảnh kinh dị căng thẳng trong căn nhà bỏ hoang lúc 2 giờ sáng')">Cảnh kinh dị</div>
             </div>
         </div>
     </div>
 
     <script>
+        const GEMINI_API_KEY = "AIzaSyBwq_MYfnnow1wkOhd1plBCQrRSichcwqw";
+        const MODEL = "gemini-1.5-flash";
+
         const chat = document.getElementById('chat');
         const input = document.getElementById('input');
+        const sendBtn = document.getElementById('sendBtn');
 
-        function addMessage(text, isUser = false) {
+        let conversationHistory = [];
+
+        const systemPrompt = `Bạn là Kaist — một AI chuyên viết truyện chuyên nghiệp, sáng tạo và tinh tế.
+Yêu cầu:
+- Viết bằng tiếng Việt tự nhiên, mượt mà, giàu hình ảnh.
+- Giữ văn phong phù hợp với thể loại.
+- Không viết quá dài (khoảng 200-450 chữ), trừ khi yêu cầu viết dài.
+- Tiếp nối mạch truyện logic và hấp dẫn.
+- Giữ giọng điệu thân thiện, chuyên nghiệp.`;
+
+        function addMessage(text, isUser = false, isLoading = false) {
             const div = document.createElement('div');
-            div.className = `msg ${isUser ? 'user' : 'ai'}`;
-            div.innerHTML = isUser ? text : `<span class="name">Kaist</span>${text}`;
+            div.className = `msg ${isUser ? 'user' : 'ai'} ${isLoading ? 'loading' : ''}`;
+            if (isUser) {
+                div.textContent = text;
+            } else {
+                div.innerHTML = `<span class="name">Kaist</span>${text}`;
+            }
             chat.appendChild(div);
             chat.scrollTop = chat.scrollHeight;
+            return div;
         }
 
-        function send() {
+        async function send() {
             const text = input.value.trim();
             if (!text) return;
+
             addMessage(text, true);
             input.value = '';
-            setTimeout(() => {
-                addMessage(`Mình đã nhận ý tưởng của bạn.<br><br>Đây là phiên bản giao diện hoàn chỉnh. Khi kết nối API thật, Kaist sẽ viết truyện dài và chất lượng cao hơn rất nhiều.<br><br>Bạn muốn mình tiếp tục theo hướng nào?`);
-            }, 600);
+            sendBtn.disabled = true;
+
+            const loadingMsg = addMessage("Đang viết...", false, true);
+
+            try {
+                conversationHistory.push({
+                    role: "user",
+                    parts: [{ text: text }]
+                });
+
+                const response = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            system_instruction: {
+                                parts: [{ text: systemPrompt }]
+                            },
+                            contents: conversationHistory,
+                            generationConfig: {
+                                temperature: 0.9,
+                                maxOutputTokens: 1024
+                            }
+                        })
+                    }
+                );
+
+                const data = await response.json();
+                loadingMsg.remove();
+
+                if (data.error) {
+                    addMessage(`<strong>Lỗi API:</strong> ${data.error.message}`);
+                    conversationHistory.pop();
+                } else {
+                    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "Lỗi tạo nội dung.";
+                    addMessage(reply.replace(/\n/g, "<br>"));
+                    conversationHistory.push({
+                        role: "model",
+                        parts: [{ text: reply }]
+                    });
+                }
+            } catch (err) {
+                loadingMsg.remove();
+                addMessage("<strong>Lỗi kết nối:</strong> " + err.message);
+                conversationHistory.pop();
+            }
+
+            sendBtn.disabled = false;
+            input.focus();
         }
 
         function quick(text) {
@@ -484,18 +553,13 @@
         }
 
         function newChat() {
-            chat.innerHTML = `
-                <div class="msg ai">
-                    <span class="name">Kaist</span>
-                    Xin chào, mình là Kaist — AI chuyên viết truyện.<br><br>
-                    Bạn muốn bắt đầu câu chuyện mới nào?
-                </div>`;
+            conversationHistory = [];
+            chat.innerHTML = `<div class="msg ai"><span class="name">Kaist</span>Xin chào, bạn muốn bắt đầu câu chuyện mới nào?</div>`;
         }
 
         function toggleTheme() {
             const body = document.body;
-            const current = body.getAttribute('data-theme');
-            body.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+            body.setAttribute('data-theme', body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
         }
 
         input.addEventListener('keydown', function(e) {
